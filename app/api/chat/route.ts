@@ -13,8 +13,8 @@ export async function POST(req: Request) {
 
     const { data, error } = await supabase.rpc("match_documents", {
       query_embedding: queryVector,
-      match_threshold: 0.3,
-      match_count: 8
+      match_threshold: 0.4,
+      match_count: 10
     })
 
     if (error) throw new Error("Supabase error: " + error.message)
