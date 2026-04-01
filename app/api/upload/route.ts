@@ -13,7 +13,6 @@ export async function POST(req: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
-    // Smart extraction — handles both text and scanned PDFs
     const { text, usedOCR } = await extractTextFromPDF(buffer)
 
     if (!text || text.length < 50) {
@@ -23,18 +22,23 @@ export async function POST(req: Request) {
     const chunks = chunkText(text)
     const docId = `${file.name}-${Date.now()}`
 
+    // Generate all embeddings first
+    const vectors: any[] = []
     for (const chunk of chunks) {
       const vector = await embeddings.embedQuery(chunk)
-      await supabase.from("documents").insert({
+      vectors.push({
         content: chunk,
-        metadata: {
-          source: file.name,
-          docId,
-          uploadedAt: new Date().toISOString(),
-          usedOCR
-        },
+        metadata: { source: file.name, docId, uploadedAt: new Date().toISOString(), usedOCR },
         embedding: vector
       })
+    }
+
+    // Batch insert in groups of 20 to avoid payload limits
+    const batchSize = 20
+    for (let i = 0; i < vectors.length; i += batchSize) {
+      const batch = vectors.slice(i, i + batchSize)
+      const { error } = await supabase.from("documents").insert(batch)
+      if (error) throw new Error(error.message)
     }
 
     return Response.json({
